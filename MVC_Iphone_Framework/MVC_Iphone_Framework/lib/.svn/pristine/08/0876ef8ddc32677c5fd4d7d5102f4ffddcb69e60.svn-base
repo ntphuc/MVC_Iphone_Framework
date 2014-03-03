@@ -1,0 +1,299 @@
+//
+//  HTTPEngine.m
+//  NetworkDemo
+//
+//  Created by rd on 6/7/10.
+//  Copyright 2010 Viettel. All rights reserved.
+//
+
+#import "HTTPEngine.h"´
+//library
+#import <CoreFoundation/CoreFoundation.h>
+#import <CoreFoundation/CFStream.h>
+#import <CFNetwork/CFHTTPStream.h>
+#import <CFNetwork/CFHTTPMessage.h>
+#import <CoreFoundation/CFString.h>
+//user defined
+#import "HTTPRequest.h"
+#import "HTTPResponse.h"
+#import "HTTPClient.h"
+#import "NetworkUtils.h"
+
+#define kReadBufSize 1024
+
+@implementation HTTPEngine
+- (id) initWithHTTPClient: (HTTPClient*) aHTTPClient {
+	if (self = [super init]) {
+		httpClient = aHTTPClient;
+	}
+	return self;
+}
+
+- (id) init {
+	[self initWithHTTPClient:nil];
+	return self;
+}
+
+- (BOOL)checkURL:(NSString*)url{
+	NSRange rangeOfString = [url rangeOfString:@"\\"];
+	if(rangeOfString.location != NSNotFound)
+		return FALSE;
+	else {
+		rangeOfString = [url rangeOfString:@"http://"];
+		if(rangeOfString.location == NSNotFound)
+			return FALSE;
+		else{
+			rangeOfString = [url rangeOfString:@" "];
+			if(rangeOfString.location != NSNotFound)
+				return FALSE;
+			else {
+				rangeOfString = [url rangeOfString:@"("];
+				if(rangeOfString.location != NSNotFound)
+					return FALSE;
+				return TRUE;
+			}
+			return TRUE;
+		}
+		
+		
+	}
+	
+}
+
+- (HTTPResponse*) request:(HTTPRequest*) httpRequest
+{
+	if (! httpRequest) {
+		return nil;
+	}
+//	HTTPResponse* httpResponse = nil;
+//	httpResponse = [httpRequest createHTTPResponse];
+//	for (int i = 0;  i < 2;  i++) {
+//		CFReadStreamRef readStream;
+//		CFHTTPMessageRef request;
+//		CFHTTPMessageRef myResponse; 
+//		UInt32 myErrCode;
+//		@try{
+//			if(![self checkURL:httpRequest.uri]) {
+//				httpResponse.tag = httpRequest.tag;
+//				httpResponse.action = httpRequest.action;
+//				httpResponse.identifier = httpRequest.identifier;
+//				httpResponse.userData = httpRequest.userData;
+//				return httpResponse;
+//			}
+//			NSString* requestURLString = httpRequest.uri;
+//			NSURL* url = [ NSURL URLWithString: requestURLString ];
+//			CFMutableDataRef bodyData = CFDataCreateMutable(NULL, 0);
+//			if (httpRequest.method == GET) {
+//				@try{
+//					request = CFHTTPMessageCreateRequest(kCFAllocatorDefault, CFSTR("GET"), (CFURLRef) url, kCFHTTPVersion1_1);
+//				}@catch (NSException *e) {
+//					continue;
+//				}
+//			}
+//			else if (httpRequest.method == POST){
+//				request = CFHTTPMessageCreateRequest(kCFAllocatorDefault, CFSTR("POST"), (CFURLRef) url, kCFHTTPVersion1_1);
+//				if (httpRequest.data != nil){
+//					UInt8 *myBytes = (UInt8 *)malloc([httpRequest.data length]); 
+//					[httpRequest.data getBytes:myBytes];
+//					const UInt8* ptrData = myBytes;
+//					int dataLength = [httpRequest.data length];
+//					CFDataAppendBytes(bodyData, ptrData, dataLength);
+//					CFHTTPMessageSetBody(request, (CFDataRef) bodyData);
+//					free(myBytes);
+//				}
+//				else {
+//					CFStringRef requestMessage = CFSTR("");
+//					CFHTTPMessageSetBody(request, (CFDataRef) requestMessage);
+//					CFRelease(requestMessage);
+//				}
+//			}
+//			if (httpClient != nil && httpClient.userAgent != nil) {
+//				CFStringRef requestHeader = CFSTR("User-Agent");
+//				CFStringRef requestHeaderValue = (CFStringRef)httpClient.userAgent;
+//				CFHTTPMessageSetHeaderFieldValue(request, requestHeader, requestHeaderValue);
+//				CFRelease(requestHeader);
+//			}
+//			CFStringRef requestHeader = CFSTR("Content-Type");
+//			CFStringRef requestHeaderValue = (CFStringRef) httpRequest.contentType;
+//			CFHTTPMessageSetHeaderFieldValue(request, requestHeader, requestHeaderValue);
+//			CFRelease(requestHeader);
+//			requestHeader = CFSTR("Accept");
+//			requestHeaderValue = CFSTR("*/*");
+//			CFHTTPMessageSetHeaderFieldValue(request, requestHeader, requestHeaderValue);
+//			CFRelease(requestHeader);
+//			CFRelease(requestHeaderValue);
+//			if (! request)
+//			{
+//				continue;
+//			}
+//			if (httpRequest.cookie != nil)
+//			{
+//				CFStringRef requestHeader = CFSTR("Cookie");
+//				CFStringRef requestHeaderValue = (CFStringRef)httpRequest.cookie;
+//				CFHTTPMessageSetHeaderFieldValue(request, requestHeader, requestHeaderValue);
+//				CFRelease(requestHeader);
+//			}
+//			readStream = CFReadStreamCreateForHTTPRequest(kCFAllocatorDefault, (CFHTTPMessageRef) request);
+//			CFRelease(request);
+//			CFRelease(bodyData);
+//			if (! readStream)
+//			{
+//				continue;
+//			}
+//			
+//			if (CFReadStreamOpen(readStream))
+//			{
+//				CFIndex numBytesRead;
+//				BOOL isFalsed = NO;
+//				do
+//				{
+//					UInt8 buf[kReadBufSize];
+//					
+//					numBytesRead = CFReadStreamRead(readStream, buf, sizeof(buf));
+//					myResponse = (CFHTTPMessageRef)CFReadStreamCopyProperty(readStream, kCFStreamPropertyHTTPResponseHeader);
+//					
+//					if(myResponse){
+//						myErrCode = CFHTTPMessageGetResponseStatusCode(myResponse);
+//						if(myErrCode != 200){
+//							CFRelease(myResponse);
+//							
+//							httpResponse.resCode = myErrCode;
+//							isFalsed = YES;
+//							break;
+//						} else {
+//							CFRelease(myResponse);
+//						}
+//					} else {
+//						isFalsed = YES;
+//						break;
+//					}
+//
+//					if(numBytesRead > 0)
+//					{
+//						httpResponse.resCode = 200;
+//						[httpResponse appendData:buf withDataSize:(int)numBytesRead];
+//					}					
+//				} while( numBytesRead > 0 );
+//				
+//				CFReadStreamClose(readStream);
+//				CFRelease(readStream);
+//				
+//				if (isFalsed) {
+//					continue;
+//				}
+//			}
+//			else
+//			{
+//				continue;
+//			}
+//			
+//			httpResponse.tag = httpRequest.tag;
+//			httpResponse.action = httpRequest.action;
+//			httpResponse.identifier = httpRequest.identifier;
+//			httpResponse.userData = httpRequest.userData;
+//			return httpResponse;
+//			
+//		}@catch (NSException *e){
+//			continue;
+//		}
+//	}
+//	
+//	httpResponse.tag = httpRequest.tag;
+//	httpResponse.action = httpRequest.action;
+//	httpResponse.identifier = httpRequest.identifier;
+//	httpResponse.userData = httpRequest.userData;
+//	return httpResponse;
+	
+	
+	HTTPResponse* httpResponse = [httpRequest createHTTPResponse];
+	for (int i = 0;  i < 2;  i++) {
+		@try {
+			//prepar request
+			NSString *urlString = httpRequest.uri;
+			NSMutableURLRequest *request = [[NSMutableURLRequest alloc] init];
+			[request setTimeoutInterval: 120];
+			[request setURL:[NSURL URLWithString:urlString]];
+			//set headers
+			[request addValue: httpRequest.contentType forHTTPHeaderField: @"Content-Type"];
+			if ([httpRequest.contentType isEqualToString: [NetworkUtils getJsonContentType]]) {
+				[request setTimeoutInterval: 120];
+			}
+			if ([httpRequest.contentType isEqualToString: [NetworkUtils getMultipartContentType]]) {
+				[request setTimeoutInterval: 300];
+			}
+			[request addValue: httpClient.userAgent forHTTPHeaderField: @"User-Agent"];
+			[request addValue: httpRequest.cookie forHTTPHeaderField: @"Cookie"];
+			if (httpRequest.method == GET) {
+				[request setHTTPMethod:@"GET"];
+			}
+			else if (httpRequest.method == POST){
+				[request setHTTPMethod:@"POST"];
+				[request setHTTPBody: httpRequest.data];
+			}
+			//get response
+			NSHTTPURLResponse* urlResponse = nil;  
+			NSError *error = [[NSError alloc] init];
+			NSData *responseData = [NSURLConnection sendSynchronousRequest:request returningResponse:&urlResponse error:&error];  
+			if ( error ) {
+				[error release];
+				[request release];
+				
+				httpResponse.resCode = [error code];
+				httpResponse.tag = httpRequest.tag;
+				httpResponse.action = httpRequest.action;
+				httpResponse.identifier = httpRequest.identifier;
+				httpResponse.userData = httpRequest.userData;
+				continue;
+			}
+			[error release];
+			[request release];
+			if ([urlResponse statusCode] >= 200 && [urlResponse statusCode] < 300) {
+				
+				NSMutableData *data = [[NSMutableData alloc] init];
+				[data appendData: responseData];
+				httpResponse.data = data;
+				[data release];
+				httpResponse.resCode = [urlResponse statusCode];
+				httpResponse.tag = httpRequest.tag;
+				httpResponse.action = httpRequest.action;
+				httpResponse.identifier = httpRequest.identifier;
+				httpResponse.userData = httpRequest.userData;		
+				return httpResponse;
+			} else {
+				
+				NSMutableData *data = [[NSMutableData alloc] init];
+				[data appendData: responseData];
+				httpResponse.data = data;
+				[data release];
+				httpResponse.resCode = [urlResponse statusCode];
+				httpResponse.tag = httpRequest.tag;
+				httpResponse.action = httpRequest.action;
+				httpResponse.identifier = httpRequest.identifier;
+				httpResponse.userData = httpRequest.userData;	
+				continue;
+			}
+		}
+		@catch (NSException * e) {
+			httpResponse.resCode = 504;
+			httpResponse.tag = httpRequest.tag;
+			httpResponse.action = httpRequest.action;
+			httpResponse.identifier = httpRequest.identifier;
+			httpResponse.userData = httpRequest.userData;	
+			continue;
+		}
+		@finally {
+			
+		}
+		
+
+	}
+	return httpResponse;
+}
+
+- (void) dealloc {
+	[httpClient release];
+	[super dealloc];
+}
+
+
+@end

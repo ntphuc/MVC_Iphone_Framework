@@ -1,0 +1,58 @@
+//
+//  HTTPClient.m
+//  NetworkDemo
+//
+//  Created by rd on 6/7/10.
+//  Copyright 2010 Viettel. All rights reserved.
+//
+
+#import "HTTPClient.h"
+#import "HttpLoader.h"
+
+@implementation HTTPClient
+@synthesize userAgent;
+
+-(id) initWithNThread: (int) nConcurentThreads AndUserAgent:(NSString*)strUserAgent
+{
+	if (self = [super init])
+	{
+		requestID = 0;
+	}
+	return self;
+}
+
+-(id) init {
+	return [self initWithNThread: 2 AndUserAgent:@""];
+}
+
+-(int)request:(HTTPRequest*) httpRequest
+{
+	httpRequest.identifier = requestID;
+	
+	requestID += 1;
+//	[syncQueue push:(id)httpRequest];
+	
+	HttpLoader *loader = [[HttpLoader alloc] initWithRequest: httpRequest];
+	[loader release];
+	
+	return httpRequest.identifier;
+}
+
+-(void) dealloc
+{
+	//unblock the thread so that the thread can exit;
+//	[syncQueue unblock];
+//	
+//	//then stop threads
+//	for (int i = 0; i < [arrThread count]; i++) {
+//		HTTPThread* pThread = (HTTPThread*)[arrThread objectAtIndex:i];
+//		[pThread stop];
+//	}
+//	[arrThread release];
+//	[syncQueue release];
+//	[userAgent release];
+	[super dealloc];
+}
+
+
+@end

@@ -1,0 +1,28 @@
+//
+//  HTTPClient.h
+//  NetworkDemo
+//
+//  Created by rd on 6/7/10.
+//  Copyright 2010 Viettel. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+#import "SyncQueue.h"
+#import "HTTPThread.h"
+#import "HTTPRequest.h"
+
+@interface HTTPClient : NSObject {
+	
+	//queue contains HTTPRequest
+	SyncQueue* syncQueue;
+	NSMutableArray* arrThread;
+	//generate requestID
+	UInt32 requestID;
+	NSString* userAgent;
+}
+@property (nonatomic, readonly) NSString* userAgent;
+
+-(id) initWithNThread: (int) nConcurentThreads AndUserAgent:(NSString*)strUserAgent;
+-(int)request:(HTTPRequest*) httpRequest;
+
+@end

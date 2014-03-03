@@ -1,0 +1,54 @@
+//
+//  WelComeViewController.m
+//  IphoneFramework
+//
+//  Created by Thanh Nguyen on 3/21/12.
+//  Copyright (c) 2012 Viettel. All rights reserved.
+//
+
+#import "WelComeViewController.h"
+
+@interface WelComeViewController ()
+
+@end
+
+@implementation WelComeViewController
+
+- (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
+{
+    self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
+    if (self) {
+        // Custom initialization
+    }
+    return self;
+}
+
+- (void) showView:(ActionEvent *)actionEvent withAnimatin:(BOOL)animation {
+    [super showView:actionEvent withAnimatin:animation];
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+	// Do any additional setup after loading the view.
+    UILabel* lb_welcome = [[UILabel alloc] initWithFrame:CGRectMake(10, 30, SCREEN_WIDTH - 10*2, 200)];
+    lb_welcome.font = [UIFont systemFontOfSize:24];
+    lb_welcome.text = @"Welcome demo application!";
+    lb_welcome.textColor = [UIColor greenColor];
+    [self.view addSubview:lb_welcome];
+    [lb_welcome release];
+    self.logoTitle = @"Welcome Demo";
+}
+
+- (void)viewDidUnload
+{
+    [super viewDidUnload];
+    // Release any retained subviews of the main view.
+}
+
+- (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation
+{
+    return (interfaceOrientation == UIInterfaceOrientationPortrait);
+}
+
+@end

@@ -1,0 +1,78 @@
+//
+//  AppController.m
+//  IphoneFramework
+//
+//  Created by HieuNQ on 3/13/12.
+//  Copyright 2012 __MyCompanyName__. All rights reserved.
+//
+
+#import "AppController.h"
+#import "AppService.h"
+#import "BaseViewController.h"
+#import "WelComeViewController.h"
+
+@implementation AppController
+
+AppController *appController = nil;
+
++ (AppController*) getController {
+    if (appController == nil) {
+        appController = [[AppController alloc] init];
+    }
+    return appController;
+}
+
+- (void) handleViewEvent:(ActionEvent *)action {
+    switch (action.action) {
+        case login: {
+            //handle strane view.
+            BaseViewController* view = (BaseViewController*) action.sender;
+            [view presentSmallWaiting];
+            [[AppService getService] sentModelRequest:action];
+        }
+            break;
+        case showWelcome: {
+            WelComeViewController* view;
+            if (action.tag == 0) {
+                view = [[WelComeViewController alloc] initWithNibName:nil bundle:nil];
+            }
+            action.sender = view;
+            [view showView:action withAnimatin:YES];
+        }
+            break;
+            
+        default:
+            break;
+    }
+    
+}
+
+- (void) handleModelEvent:(ModelEvent*) modelEvent {
+    switch (modelEvent.actionEvent.action) {
+        case login: {
+            BaseViewController* view = (BaseViewController*)modelEvent.actionEvent.sender;
+            [view receiveDataFromModel:modelEvent];
+            [view dismissSmallWaiting];
+        }
+            break;
+            
+        default:
+            break;
+    }
+}
+
+- (void) handleErrorEvent:(ModelEvent*) modelEvent {
+    switch (modelEvent.actionEvent.action) {
+        case login: {
+            BaseViewController* view = (BaseViewController*)modelEvent.actionEvent.sender;
+            [view receiveErrorFromModel:modelEvent];
+            [view dismissSmallWaiting];
+        }
+            break;
+            
+        default:
+            break;
+    }
+}
+
+@end

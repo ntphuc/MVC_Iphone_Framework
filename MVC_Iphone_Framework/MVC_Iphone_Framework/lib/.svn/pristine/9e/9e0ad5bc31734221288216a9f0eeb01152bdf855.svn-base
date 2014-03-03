@@ -1,0 +1,30 @@
+//
+//  HttpLoader.h
+//  KunKun
+//
+//  Created by PTSPM_HIEUNQ1 on 7/18/11.
+//  Copyright 2011 Trung tâm phần mềm Viettel. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+#import "HTTPRequest.h"
+#import "HTTPResponse.h"
+
+@interface HttpLoader : NSObject {
+	NSMutableData *receivedData;
+	NSURLConnection *httpConnection;
+	HTTPRequest *httpRequest;
+	HTTPResponse* httpResponse;
+	int requestCount;
+}
+
+@property (nonatomic, retain) NSMutableData *receivedData;
+@property (nonatomic, retain) NSURLConnection *httpConnection;
+@property (nonatomic, retain) HTTPRequest *httpRequest;
+@property (nonatomic, retain) HTTPResponse *httpResponse;
+@property (nonatomic, assign) int requestCount;
+
+- (id) initWithRequest: (HTTPRequest*) httprequest;
+- (HTTPRequest *) getTrackingRequest;
+
+@end

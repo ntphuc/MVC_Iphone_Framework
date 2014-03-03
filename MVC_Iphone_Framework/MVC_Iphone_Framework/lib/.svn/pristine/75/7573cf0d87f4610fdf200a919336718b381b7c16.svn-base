@@ -1,0 +1,186 @@
+//
+//  HTTPThread.m
+//  NetworkDemo
+//
+//  Created by rd on 6/7/10.
+//  Copyright 2010 Viettel. All rights reserved.
+//
+
+#import "HTTPThread.h"
+#import "HTTPRequest.h"
+#import "HTTPResponse.h"
+#import "NetworkUtils.h"
+#import "Constants.h"
+#import "IphoneFrameworkAppDelegate.h"
+#import "NetworkEngine.h"
+
+static int nextThreadID = 0;
+
+@implementation HTTPThread
+
+@synthesize requestQueue = syncQueue;
+
+-(id) initWithHTTPClient:(HTTPClient*) httpClient {
+	if (self = [super init])
+	{
+		threadID = nextThreadID++;
+		syncQueue = nil;
+		isRunning = NO;
+		bStopRequest = NO;
+		httpEngine = [[HTTPEngine alloc] initWithHTTPClient:httpClient];
+	}
+	return self;
+}
+
+-(id) init
+{
+	[self initWithHTTPClient:nil];
+	return self;
+}
+
+-(void) dealloc
+{
+	[self stop];
+	[httpEngine release];
+	[super dealloc];
+}
+
+-(void) start
+{
+	if (isRunning == YES) {
+		return;
+	}
+	bStopRequest = NO;
+	[NSThread detachNewThreadSelector:@selector(threadFunction:) toTarget:self withObject:nil];
+}
+
+-(void) stop
+{
+	if (isRunning == NO) {
+		return;
+	}
+	bStopRequest = YES;
+	while (isRunning == YES) {
+		usleep(200);
+	}
+}
+
+-(void) threadFunction:(id) object
+{
+	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+	isRunning = YES;
+	while (bStopRequest == NO) {
+		@try {
+			HTTPRequest* httpRequest = (HTTPRequest*)[syncQueue pop];
+			if (httpRequest != nil) {
+				HTTPResponse* pResponse = [httpEngine request:httpRequest];
+				if(httpRequest.observer != nil) {
+					if (pResponse != nil) {
+						if(pResponse.resCode != 200)
+						{
+							NSArray *arguments = [[NSArray alloc] initWithObjects: httpRequest, pResponse, @"Không thể kết nối mạng.", nil];
+							[self performSelectorOnMainThread:@selector(handleReceiveError:) withObject:arguments waitUntilDone:NO];
+							[arguments release];
+						} else {
+							NSMutableArray *arguments =  [[NSMutableArray alloc] initWithObjects: httpRequest, pResponse, nil];
+							[self performSelectorOnMainThread:@selector(handleReceiveData:) withObject:arguments waitUntilDone:NO];
+							[arguments release];
+						}
+					}
+					else {
+						NSArray *arguments = [[NSArray alloc] initWithObjects: httpRequest, pResponse, @"Không thể kết nối mạng.", nil];
+						[self performSelectorOnMainThread:@selector(handleReceiveError:) withObject:arguments waitUntilDone:NO];
+						[arguments release];
+					}
+				}
+				[httpRequest release];
+				httpRequest = nil;
+				if (pResponse != nil) {
+					[pResponse release];
+					pResponse = nil;
+				}
+			}
+		}@catch (NSException *e) {
+			[pool release];
+			return;
+		}
+		@finally {
+		}
+	}
+	isRunning = NO;
+	[pool release];
+}
+	
+-(void) handleReceiveData: (NSArray *) arguments{
+	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+	@try{
+		HTTPRequest *httpRequest = (HTTPRequest *) [arguments objectAtIndex:0];
+		HTTPResponse *httpResponse = [(HTTPResponse *) [arguments objectAtIndex:1] retain];
+		[httpRequest.observer onHttpReceivedData:httpResponse];
+		[httpResponse release];
+	}@catch (NSException *e) {
+	}
+	[pool release];
+}
+
+- (void) handleReceiveError:(NSArray *)arguments{
+	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+	HTTPRequest *httpRequest = (HTTPRequest *) [arguments objectAtIndex:0];
+	HTTPResponse *httpResponse = (HTTPResponse *) [arguments objectAtIndex:1];
+	NSString *httpError = (NSString *) [arguments objectAtIndex:2];
+	@try{
+		if (httpRequest.userData) {
+			HTTPRequest *req = [self getTrackingRequest: arguments];
+			[[NetworkEngine getHttpClient] request: req];
+			[req release];
+		}
+		[httpRequest.observer onHttpReceivedError: httpResponse:httpError];
+	}@catch (NSException *e) {
+		[httpRequest.observer onHttpReceivedData:httpResponse];
+
+	}
+	[pool release];
+}
+
+- (HTTPRequest *) getTrackingRequest: (NSArray *)array {
+	HTTPRequest *httpRequest = (HTTPRequest *) [array objectAtIndex:0];
+	HTTPResponse *httpResponse = (HTTPResponse *) [array objectAtIndex:1];
+
+	NSString *platform = @"iPhone";
+	NSString *model = [NSString stringWithFormat: @"%f", [[[UIDevice currentDevice] systemVersion] floatValue]];
+	NSString *version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"];
+	NSString *errName = @"Http Error";
+	NSString *description = [NSString stringWithFormat: @"Action: %d - URL: %@ - Error Code: %d", httpRequest.action, httpRequest.uri, httpResponse.resCode];
+	
+	NSMutableDictionary *dic = [[NSMutableDictionary alloc] init];
+	
+	//Set method name
+	[dic setObject: @"common.createTracking" forKey: @"method"];
+	
+	//Set method parameters
+	NSMutableDictionary *params = [[NSMutableDictionary alloc] init];
+	[params setObject: platform forKey: @"platform"];
+	[params setObject: model forKey: @"model"];
+	[params setObject: version forKey: @"version"];
+	[params setObject: errName forKey: @"errName"];
+	[params setObject: description forKey: @"description"];
+	[dic setObject: params forKey: @"params"];
+	[params release];
+	
+	//Create request
+	NSMutableData *data = [NetworkUtils getJsonMutableDataWithObject: dic];
+	HTTPRequest *req = [[HTTPRequest alloc] init];
+	req.method = POST;
+//	KunKunAppDelegate *kunkunAppDelegate = [KunKunAppDelegate getInstance];
+//	req.cookie = kunkunAppDelegate.profile.sessionId;
+	req.uri = KUNKUN_REQUEST_PATH;
+	req.contentType = CONTENTTYPE_JSON;
+	req.observer = nil;
+	req.data = data;
+	
+	[dic release];
+	[data release];
+	
+	return req;
+}
+@end

@@ -1,0 +1,49 @@
+//
+//  HTTPRequest.m
+//  NetworkDemo
+//
+//  Created by rd on 6/7/10.
+//  Copyright 2010 Viettel. All rights reserved.
+//
+
+#import "HTTPRequest.h"
+#import "Constants.h"
+
+@implementation HTTPRequest
+
+@synthesize observer;
+@synthesize method;
+@synthesize uri;
+@synthesize cookie;
+@synthesize contentType;
+
+-(id)init
+{
+    if (self = [super init])
+    {
+		// Initialization code here
+		observer = nil;
+		method = 0;
+		contentType = @"";
+		uri = KUNKUN_REQUEST_PATH;
+		cookie = [[NSString alloc] init];
+    }
+    return self;
+}
+
+-(void) dealloc
+{
+	[uri release];
+	[cookie release];
+	[contentType release];
+	[super dealloc];
+}
+
+- (HTTPResponse*) createHTTPResponse
+{
+	HTTPResponse* httpResponse = [[HTTPResponse alloc] init];
+	httpResponse.action = self.action;
+	httpResponse.identifier = self.identifier;
+	return httpResponse;
+}
+@end

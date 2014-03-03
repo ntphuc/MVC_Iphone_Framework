@@ -1,0 +1,141 @@
+//
+//  AppService.m
+//  IphoneFramework
+//
+//  Created by HieuNQ on 3/13/12.
+//  Copyright 2012 __MyCompanyName__. All rights reserved.
+//
+
+#import "AppService.h"
+#import "HTTPRequest.h"
+#import "NetworkEngine.h"
+#import "Constants.h"
+#import "NetworkUtils.h"
+#import "ModelEvent.h"
+#import "JSON.h"
+#import "AppController.h"
+
+
+@implementation AppService
+
+AppService* appService = nil;
+
++ (AppService*) getService {
+    if (appService == nil) {
+        appService = [[AppService alloc] init];
+    }
+    return appService;
+}
+
+- (void) requestLogin: (ActionEvent*) actionEvent {
+    NSDictionary* postData = (NSDictionary*) actionEvent.viewData;
+	NSString* username = [postData objectForKey:@"username"];
+	NSString* password = [postData objectForKey:@"password"];
+	NSMutableDictionary *dic = [[NSMutableDictionary alloc] init];
+	[dic setObject:@"login" forKey:@"method"];
+	NSMutableDictionary *params = [[NSMutableDictionary alloc] init];
+	if (username) {
+		[params setObject:username forKey:@"username"];
+	}
+	if (password) {
+		[params setObject:password forKey:@"password"];
+	}
+	[dic setObject:params forKey:@"params"];
+    [params release];
+    
+#ifdef LOG_ERROR
+	SBJsonWriter *writer = [[SBJsonWriter alloc] init];
+	actionEvent.json = [writer stringWithObject:dic];
+	[writer release];
+#endif
+    
+	NSMutableData *data = [NetworkUtils getJsonMutableDataWithObject:dic];
+	[dic release];
+    
+	HTTPRequest *req = [[HTTPRequest alloc] init];
+	req.method = POST;
+	req.uri = KUNKUN_REQUEST_PATH;
+	req.contentType = [NetworkUtils getJsonContentType];
+	req.observer = self;
+	req.data = data;
+	req.userData = actionEvent;
+	[data release];
+    //send network request (if has server)
+//    [[NetworkEngine getHttpClient] request:req];
+    //demo
+    [self getJsonFromActionEvent:actionEvent];
+    [req release];
+    
+}
+
+- (void) getJsonFromActionEvent: (ActionEvent*) actionEvent {
+    HTTPResponse* response = [[HTTPResponse alloc] init];
+    response.userData = actionEvent;
+    NSMutableDictionary *dic = [[NSMutableDictionary alloc] init];
+	[dic setObject:@"200" forKey:@"errorCode"];
+    [dic setObject:@"1" forKey:@"result"];
+	NSMutableDictionary *params = [[NSMutableDictionary alloc] init];
+	[params setObject:@"demo1" forKey:@"externalId"];
+	[params setObject:@"demo2" forKey:@"type"];
+	[dic setObject:params forKey:@"params"];
+    [params release];
+    
+	NSMutableData *data = [NetworkUtils getJsonMutableDataWithObject:dic];
+	[dic release];
+    response.data = data;
+    [self performSelector:@selector(onHttpReceivedData:) withObject:response afterDelay:2.0f];
+    [response release];
+}
+
+- (void) sentModelRequest:(ActionEvent *)actionEvent {
+    switch (actionEvent.action) {
+        case login:
+            [self requestLogin:(ActionEvent*) actionEvent];
+            break;
+            
+        default:
+            break;
+    }
+}
+
+- (void) onHttpReceivedData:(HTTPResponse *)httpResponse {
+    ModelEvent *modelEvent = [[ModelEvent alloc] init];
+    modelEvent.actionEvent = (ActionEvent*) httpResponse.userData;
+    
+    NSString *json = [[NSString alloc] initWithData:httpResponse.data encoding:NSUTF8StringEncoding];
+    NSDictionary *jsonValue = [json JSONValue];
+    [json release];
+    NSString* errorCode = [jsonValue objectForKey:@"errorCode"];
+    modelEvent.modelCode = [errorCode intValue];
+    if (modelEvent.modelCode == 200) {
+        //success
+        switch (modelEvent.actionEvent.action) {
+            case login:
+                //parse data
+//                modelEvent.modelData = parseData;
+                [[AppController getController] handleModelEvent:modelEvent];
+                break;
+                
+            default:
+                break;
+        }
+    } else {
+        //error
+        switch (modelEvent.actionEvent.action) {
+            case login: {
+                [[AppController getController] handleErrorEvent:modelEvent];
+            }
+                break;
+                
+            default:
+                break;
+        }
+    }
+    [modelEvent release];
+}
+
+- (void) onHttpReceivedError:(HTTPResponse *)httpResponse :(NSString *)error {
+    
+}
+
+@end

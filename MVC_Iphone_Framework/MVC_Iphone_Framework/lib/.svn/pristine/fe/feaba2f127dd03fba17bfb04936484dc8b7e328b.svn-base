@@ -1,0 +1,325 @@
+//
+//  HttpLoader.m
+//  KunKun
+//
+//  Created by PTSPM_HIEUNQ1 on 7/18/11.
+//  Copyright 2011 Trung tâm phần mềm Viettel. All rights reserved.
+//
+
+#import "HttpLoader.h"
+#import "NetworkUtils.h"
+#import "NetworkEngine.h"
+#import "IphoneFrameworkAppDelegate.h"
+#import "Constants.h"
+#import "ActionEvent.h"
+
+#define MAX_REQUEST 2
+#define MAX_REQUEST_TRACKING 10
+#define TIMEOUT_JSON 120.0
+#define TIMEOUT_MULTIPART 300.0
+
+@implementation HttpLoader
+
+@synthesize receivedData;
+@synthesize httpConnection;
+@synthesize httpRequest;
+@synthesize httpResponse;
+@synthesize requestCount;
+
+- (id) initWithRequest: (HTTPRequest*) httprequest {
+	if (self = [super init]) {
+		
+		self.httpRequest = httprequest;
+		httpResponse = [httpRequest createHTTPResponse];
+		httpResponse.tag = httpRequest.tag;
+		httpResponse.action = httpRequest.action;
+		httpResponse.identifier = httpRequest.identifier;
+		httpResponse.userData = httpRequest.userData;
+		
+		NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+		
+		requestCount = 1;
+		
+		NSString *urlString = httpRequest.uri;
+		NSMutableURLRequest *request = [[NSMutableURLRequest alloc] init];
+		[request setURL:[NSURL URLWithString:urlString]];
+		//set headers
+		[request addValue: httpRequest.contentType forHTTPHeaderField: @"Content-Type"];
+		[request addValue: @"Iphone client 1.0" forHTTPHeaderField: @"User-Agent"];
+		[request addValue: httpRequest.cookie forHTTPHeaderField: @"Cookie"];
+		if (httpRequest.method == GET) {
+			[request setHTTPMethod:@"GET"];
+		}
+		else if (httpRequest.method == POST){
+			[request setHTTPMethod:@"POST"];
+			[request setHTTPBody: httpRequest.data];
+		}
+		if ([httpRequest.contentType isEqualToString: [NetworkUtils getJsonContentType]]) {
+			[request setTimeoutInterval: TIMEOUT_JSON];
+			[self performSelector:@selector(cancelLoading)
+					   withObject:nil
+					   afterDelay: TIMEOUT_JSON];
+		}
+		if ([httpRequest.contentType isEqualToString: [NetworkUtils getMultipartContentType]]) {
+			[request setTimeoutInterval: TIMEOUT_MULTIPART];
+			[self performSelector:@selector(cancelLoading)
+					   withObject:nil
+					   afterDelay: TIMEOUT_MULTIPART];
+		}
+		httpConnection = [[NSURLConnection alloc] initWithRequest: request delegate: self startImmediately:YES];
+		[request release];
+		
+		[pool release];
+	}
+	return self;
+}
+
+- (void) reRequest {
+	[httpConnection release], httpConnection = nil;
+	[receivedData release], receivedData = nil;
+	
+	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+	
+	requestCount ++;
+	
+	NSString *urlString = httpRequest.uri;
+	NSMutableURLRequest *request = [[NSMutableURLRequest alloc] init];
+	[request setURL:[NSURL URLWithString:urlString]];
+	//set headers
+	[request addValue: httpRequest.contentType forHTTPHeaderField: @"Content-Type"];
+	[request addValue: @"Iphone client 1.0" forHTTPHeaderField: @"User-Agent"];
+	[request addValue: httpRequest.cookie forHTTPHeaderField: @"Cookie"];
+	if (httpRequest.method == GET) {
+		[request setHTTPMethod:@"GET"];
+	}
+	else if (httpRequest.method == POST){
+		[request setHTTPMethod:@"POST"];
+		[request setHTTPBody: httpRequest.data];
+	}
+	if ([httpRequest.contentType isEqualToString: [NetworkUtils getJsonContentType]]) {
+		[request setTimeoutInterval: TIMEOUT_JSON];
+		[self performSelector:@selector(cancelLoading)
+				   withObject:nil
+				   afterDelay: TIMEOUT_JSON];
+	}
+	if ([httpRequest.contentType isEqualToString: [NetworkUtils getMultipartContentType]]) {
+		[request setTimeoutInterval: TIMEOUT_MULTIPART];
+		[self performSelector:@selector(cancelLoading)
+				   withObject:nil
+				   afterDelay: TIMEOUT_MULTIPART];
+	}
+	httpConnection = [[NSURLConnection alloc] initWithRequest: request delegate: self startImmediately:YES];
+	[request release];
+	
+	[pool release];
+}
+
+- (void)cancelLoading
+{
+	[httpConnection cancel];
+	
+	if (httpRequest.action == 404) {
+		if (requestCount < MAX_REQUEST_TRACKING) {
+			[self reRequest];
+			return;
+		} 
+	} else {
+		if (requestCount < MAX_REQUEST) {
+			[self reRequest];
+			return;
+		}
+	}
+	
+	httpResponse.resCode = -1001;
+	if(httpRequest.observer != nil) {
+		[self performSelectorOnMainThread:@selector(handleReceiveError) withObject: nil waitUntilDone:NO];
+	}
+	
+	[httpConnection release], httpConnection = nil;
+	[receivedData release], receivedData = nil;
+	
+}
+
+#pragma mark NSURL Loading
+
+- (void) connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *) response
+{
+	[receivedData release], receivedData = nil;
+	receivedData = [[NSMutableData alloc] init];
+	NSHTTPURLResponse* urlResponse = (NSHTTPURLResponse *)response;  
+	httpResponse.resCode = [urlResponse statusCode];
+}
+
+- (void) connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
+{
+	[receivedData appendData:data];
+}
+
+- (void) connectionDidFinishLoading:(NSURLConnection *)connection
+{
+	[NSObject cancelPreviousPerformRequestsWithTarget:self
+											 selector:@selector(cancelLoading)
+											   object:nil];
+	httpResponse.data = receivedData;
+	if(httpRequest.observer != nil) {
+		if (httpResponse != nil) {
+			if(httpResponse.resCode != 200)
+			{
+				if (httpRequest.action == 404) {
+					if (requestCount < MAX_REQUEST_TRACKING) {
+						[self reRequest];
+						return;
+					} 
+				} else {
+					if (requestCount < MAX_REQUEST) {
+						[self reRequest];
+						return;
+					}
+				}
+				[self performSelectorOnMainThread:@selector(handleReceiveError) withObject: nil waitUntilDone:NO];
+			} else {
+				[self performSelectorOnMainThread:@selector(handleReceiveData) withObject: nil waitUntilDone:NO];
+			}
+		}
+		else {
+			if (httpRequest.action == 404) {
+				if (requestCount < MAX_REQUEST_TRACKING) {
+					[self reRequest];
+					return;
+				} 
+			} else {
+				if (requestCount < MAX_REQUEST) {
+					[self reRequest];
+					return;
+				}
+			}
+			[self performSelectorOnMainThread:@selector(handleReceiveError) withObject: nil waitUntilDone:NO];
+		}
+	}
+	[httpConnection release], httpConnection = nil;
+	if (receivedData)
+	{	
+		[receivedData release], receivedData = nil;
+	}
+}
+
+- (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *) error
+{
+	[NSObject cancelPreviousPerformRequestsWithTarget:self
+											 selector:@selector(cancelLoading)
+											   object:nil];
+	
+	if (httpRequest.action == 404) {
+		if (requestCount < MAX_REQUEST_TRACKING) {
+			[self reRequest];
+			return;
+		} 
+	} else {
+		if (requestCount < MAX_REQUEST) {
+			[self reRequest];
+			return;
+		}
+	}
+
+	httpResponse.resCode = [error code];
+	if(httpRequest.observer != nil) {
+		[self performSelectorOnMainThread:@selector(handleReceiveError) withObject: nil waitUntilDone:NO];
+	}
+	[connection release], connection = nil;
+	[receivedData release], receivedData = nil;
+	
+}
+
+
+#pragma mark Properties
+
+-(void) handleReceiveData {
+	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+	@try{
+		[httpRequest.observer onHttpReceivedData: httpResponse];
+		[httpResponse release];
+		[httpRequest release];
+		httpRequest = nil;
+		httpResponse = nil;
+	}@catch (NSException *e) {
+	}
+	[pool release];
+}
+
+- (void) handleReceiveError {
+	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+	@try{
+#ifdef LOG_ERROR
+		if (httpRequest.userData) {
+			if (httpRequest.action != 404) {
+				HTTPRequest *req = [self getTrackingRequest];
+				[[NetworkEngine getHttpClient] request: req];
+				[req release];
+			}
+		}
+#endif
+		[httpRequest.observer onHttpReceivedError: httpResponse: @"Không thể kết nối mạng."];
+		[httpResponse release];
+		[httpRequest release];
+		httpRequest = nil;
+		httpResponse = nil;
+	}@catch (NSException *e) {
+	}
+	[pool release];
+}
+
+- (HTTPRequest *) getTrackingRequest {
+	
+	NSString *platform = @"iPhone";
+	NSString *model = [NSString stringWithFormat: @"%f", [[[UIDevice currentDevice] systemVersion] floatValue]];
+	NSString *version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"];
+	NSString *errName = @"Http Error";
+	NSString *actionString = @"unknown";
+	if ([httpRequest.userData isKindOfClass: [ActionEvent class]]) {
+		ActionEvent *action = httpRequest.userData;
+		if (action.json) {
+			actionString = action.json;
+		}
+	}
+	NSString *description = [NSString stringWithFormat: @"Action: %@ - URL: %@ - Error Code: %d", actionString, httpRequest.uri, httpResponse.resCode];
+	
+	NSMutableDictionary *dic = [[NSMutableDictionary alloc] init];
+	
+	//Set method name
+	[dic setObject: @"common.createTracking" forKey: @"method"];
+	
+	//Set method parameters
+	NSMutableDictionary *params = [[NSMutableDictionary alloc] init];
+	[params setObject: platform forKey: @"platform"];
+	[params setObject: model forKey: @"model"];
+	[params setObject: version forKey: @"version"];
+	[params setObject: errName forKey: @"errName"];
+	[params setObject: description forKey: @"description"];
+	[dic setObject: params forKey: @"params"];
+	[params release];
+	
+	//Create request
+	NSMutableData *data = [NetworkUtils getJsonMutableDataWithObject: dic];
+	HTTPRequest *req = [[HTTPRequest alloc] init];
+	req.method = POST;
+//	KunKunAppDelegate *kunkunAppDelegate = [KunKunAppDelegate getInstance];
+//	req.cookie = kunkunAppDelegate.profile.sessionId;
+	req.uri = KUNKUN_REQUEST_PATH;
+	req.contentType = CONTENTTYPE_JSON;
+	req.observer = nil;
+	req.data = data;
+	req.action = 404;
+	
+	[dic release];
+	[data release];
+	
+	return req;
+}
+
+- (void) dealloc
+{
+	[super dealloc];
+}
+
+
+@end
